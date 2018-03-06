@@ -24,12 +24,10 @@ All timeouts are in milliseconds.
 
 import io
 import os
-import socket
 import posixpath
+import socket
 
-from adb import adb_protocol
-from adb import common
-from adb import filesync_protocol
+from adb import adb_protocol, common, filesync_protocol
 
 # From adb.h
 CLASS = 0xFF
@@ -68,7 +66,9 @@ class AdbCommands(object):
         # self._get_service_connection
         self._service_connections = {}
 
-    def _get_service_connection(self, service, service_command=None, create=True, timeout_ms=None):
+    def _get_service_connection(
+        self, service, service_command=None, create=True, timeout_ms=None
+    ):
         """
         Based on the service, get the AdbConnection for that service or create one if it doesnt exist
 
@@ -92,13 +92,16 @@ class AdbCommands(object):
             destination_str = service
 
         connection = self.protocol_handler.Open(
-            self._handle, destination=destination_str, timeout_ms=timeout_ms)
+            self._handle, destination=destination_str, timeout_ms=timeout_ms
+        )
 
         self._service_connections.update({service: connection})
 
         return connection
 
-    def ConnectDevice(self, port_path=None, serial=None, default_timeout_ms=None, **kwargs):
+    def ConnectDevice(
+        self, port_path=None, serial=None, default_timeout_ms=None, **kwargs
+    ):
         """Convenience function to setup a transport handle for the adb device from
              usb path or serial then connect to it.
 
@@ -127,12 +130,17 @@ class AdbCommands(object):
         # If there isnt a handle override (used by tests), build one here
         if 'handle' in kwargs:
             self._handle = kwargs.pop('handle')
-        elif serial and b':' in serial:
-            self._handle = common.TcpHandle(serial, timeout_ms=default_timeout_ms)
+        elif serial and ':' in serial:
+            self._handle = common.TcpHandle(
+                serial, timeout_ms=default_timeout_ms
+            )
         else:
             self._handle = common.UsbHandle.FindAndOpen(
-                DeviceIsAvailable, port_path=port_path, serial=serial,
-                timeout_ms=default_timeout_ms)
+                DeviceIsAvailable,
+                port_path=port_path,
+                serial=serial,
+                timeout_ms=default_timeout_ms
+            )
 
         self._Connect(**kwargs)
 
@@ -165,7 +173,9 @@ class AdbCommands(object):
         if not banner:
             banner = socket.gethostname().encode()
 
-        conn_str = self.protocol_handler.Connect(self._handle, banner=banner, **kwargs)
+        conn_str = self.protocol_handler.Connect(
+            self._handle, banner=banner, **kwargs
+        )
 
         # Remove banner and colons after device state (state::banner)
         parts = conn_str.split(b'::')
@@ -184,8 +194,14 @@ class AdbCommands(object):
     def GetState(self):
         return self._device_state
 
-    def Install(self, apk_path, destination_dir='', timeout_ms=None, replace_existing=True,
-                transfer_progress_callback=None):
+    def Install(
+        self,
+        apk_path,
+        destination_dir='',
+        timeout_ms=None,
+        replace_existing=True,
+        transfer_progress_callback=None
+    ):
         """Install an apk to the device.
 
         Doesn't support verifier file, instead allows destination directory to be
@@ -206,7 +222,12 @@ class AdbCommands(object):
             destination_dir = '/data/local/tmp/'
         basename = os.path.basename(apk_path)
         destination_path = posixpath.join(destination_dir, basename)
-        self.Push(apk_path, destination_path, timeout_ms=timeout_ms, progress_callback=transfer_progress_callback)
+        self.Push(
+            apk_path,
+            destination_path,
+            timeout_ms=timeout_ms,
+            progress_callback=transfer_progress_callback
+        )
 
         cmd = ['pm install']
         if replace_existing:
@@ -231,7 +252,14 @@ class AdbCommands(object):
         cmd.append('"%s"' % package_name)
         return self.Shell(' '.join(cmd), timeout_ms=timeout_ms)
 
-    def Push(self, source_file, device_filename, mtime='0', timeout_ms=None, progress_callback=None):
+    def Push(
+        self,
+        source_file,
+        device_filename,
+        mtime='0',
+        timeout_ms=None,
+        progress_callback=None
+    ):
         """Push a file or directory to the device.
 
         Args:
@@ -247,19 +275,34 @@ class AdbCommands(object):
             if os.path.isdir(source_file):
                 self.Shell("mkdir " + device_filename)
                 for f in os.listdir(source_file):
-                    self.Push(os.path.join(source_file, f), device_filename + '/' + f,
-                              progress_callback=progress_callback)
+                    self.Push(
+                        os.path.join(source_file, f),
+                        device_filename + '/' + f,
+                        progress_callback=progress_callback
+                    )
                 return
             source_file = open(source_file, "rb")
 
         with source_file:
             connection = self.protocol_handler.Open(
-                self._handle, destination=b'sync:', timeout_ms=timeout_ms)
-            self.filesync_handler.Push(connection, source_file, device_filename,
-                                       mtime=int(mtime), progress_callback=progress_callback)
+                self._handle, destination=b'sync:', timeout_ms=timeout_ms
+            )
+            self.filesync_handler.Push(
+                connection,
+                source_file,
+                device_filename,
+                mtime=int(mtime),
+                progress_callback=progress_callback
+            )
         connection.Close()
 
-    def Pull(self, device_filename, dest_file=None, timeout_ms=None, progress_callback=None):
+    def Pull(
+        self,
+        device_filename,
+        dest_file=None,
+        timeout_ms=None,
+        progress_callback=None
+    ):
         """Pull a file from the device.
 
         Args:
@@ -280,9 +323,12 @@ class AdbCommands(object):
             raise ValueError("destfile is of unknown type")
 
         conn = self.protocol_handler.Open(
-            self._handle, destination=b'sync:', timeout_ms=timeout_ms)
+            self._handle, destination=b'sync:', timeout_ms=timeout_ms
+        )
 
-        self.filesync_handler.Pull(conn, device_filename, dest_file, progress_callback)
+        self.filesync_handler.Pull(
+            conn, device_filename, dest_file, progress_callback
+        )
 
         conn.Close()
         if isinstance(dest_file, io.BytesIO):
@@ -293,9 +339,12 @@ class AdbCommands(object):
 
     def Stat(self, device_filename):
         """Get a file's stat() information."""
-        connection = self.protocol_handler.Open(self._handle, destination=b'sync:')
+        connection = self.protocol_handler.Open(
+            self._handle, destination=b'sync:'
+        )
         mode, size, mtime = self.filesync_handler.Stat(
-            connection, device_filename)
+            connection, device_filename
+        )
         connection.Close()
         return mode, size, mtime
 
@@ -305,7 +354,9 @@ class AdbCommands(object):
         Args:
           device_path: Directory to list.
         """
-        connection = self.protocol_handler.Open(self._handle, destination=b'sync:')
+        connection = self.protocol_handler.Open(
+            self._handle, destination=b'sync:'
+        )
         listing = self.filesync_handler.List(connection, device_path)
         connection.Close()
         return listing
@@ -332,11 +383,15 @@ class AdbCommands(object):
 
     def EnableVerity(self):
         """Re-enable dm-verity checking on userdebug builds"""
-        return self.protocol_handler.Command(self._handle, service=b'enable-verity')
+        return self.protocol_handler.Command(
+            self._handle, service=b'enable-verity'
+        )
 
     def DisableVerity(self):
         """Disable dm-verity checking on userdebug builds"""
-        return self.protocol_handler.Command(self._handle, service=b'disable-verity')
+        return self.protocol_handler.Command(
+            self._handle, service=b'disable-verity'
+        )
 
     def Shell(self, command, timeout_ms=None):
         """Run command on the device, returning the output.
@@ -346,8 +401,11 @@ class AdbCommands(object):
           timeout_ms: Maximum time to allow the command to run.
         """
         return self.protocol_handler.Command(
-            self._handle, service=b'shell', command=command,
-            timeout_ms=timeout_ms)
+            self._handle,
+            service=b'shell',
+            command=command,
+            timeout_ms=timeout_ms
+        )
 
     def StreamingShell(self, command, timeout_ms=None):
         """Run command on the device, yielding each line of output.
@@ -360,8 +418,11 @@ class AdbCommands(object):
           The responses from the shell command.
         """
         return self.protocol_handler.StreamingCommand(
-            self._handle, service=b'shell', command=command,
-            timeout_ms=timeout_ms)
+            self._handle,
+            service=b'shell',
+            command=command,
+            timeout_ms=timeout_ms
+        )
 
     def Logcat(self, options, timeout_ms=None):
         """Run 'shell logcat' and stream the output to stdout.
@@ -372,7 +433,9 @@ class AdbCommands(object):
         """
         return self.StreamingShell('logcat %s' % options, timeout_ms)
 
-    def InteractiveShell(self, cmd=None, strip_cmd=True, delim=None, strip_delim=True):
+    def InteractiveShell(
+        self, cmd=None, strip_cmd=True, delim=None, strip_delim=True
+    ):
         """Get stdout from the currently open interactive shell and optionally run a command
             on the device, returning all output.
 
@@ -389,5 +452,9 @@ class AdbCommands(object):
         conn = self._get_service_connection(b'shell:')
 
         return self.protocol_handler.InteractiveShellCommand(
-            conn, cmd=cmd, strip_cmd=strip_cmd,
-            delim=delim, strip_delim=strip_delim)
+            conn,
+            cmd=cmd,
+            strip_cmd=strip_cmd,
+            delim=delim,
+            strip_delim=strip_delim
+        )

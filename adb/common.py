@@ -17,14 +17,13 @@ Common usb browsing, and usb communication.
 """
 import logging
 import platform
+import select
 import socket
 import threading
 import weakref
-import select
 
 import libusb1
 import usb1
-
 from adb import usb_exceptions
 
 DEFAULT_TIMEOUT_MS = 10000
@@ -122,7 +121,9 @@ class UsbHandle(object):
                 handle.detachKernelDriver(iface_number)
         except libusb1.USBError as e:
             if e.value == libusb1.LIBUSB_ERROR_NOT_FOUND:
-                _LOG.warning('Kernel driver not found for interface: %s.', iface_number)
+                _LOG.warning(
+                    'Kernel driver not found for interface: %s.', iface_number
+                )
             else:
                 raise
         handle.claimInterface(iface_number)
@@ -149,8 +150,11 @@ class UsbHandle(object):
             self._handle.releaseInterface(self._interface_number)
             self._handle.close()
         except libusb1.USBError:
-            _LOG.info('USBError while closing handle %s: ',
-                      self.usb_info, exc_info=True)
+            _LOG.info(
+                'USBError while closing handle %s: ',
+                self.usb_info,
+                exc_info=True
+            )
         finally:
             self._handle = None
 
@@ -170,30 +174,40 @@ class UsbHandle(object):
         if self._handle is None:
             raise usb_exceptions.WriteFailedError(
                 'This handle has been closed, probably due to another being opened.',
-                None)
+                None
+            )
         try:
             return self._handle.bulkWrite(
-                self._write_endpoint, data, timeout=self.Timeout(timeout_ms))
+                self._write_endpoint, data, timeout=self.Timeout(timeout_ms)
+            )
         except libusb1.USBError as e:
             raise usb_exceptions.WriteFailedError(
-                'Could not send data to %s (timeout %sms)' % (
-                    self.usb_info, self.Timeout(timeout_ms)), e)
+                'Could not send data to %s (timeout %sms)' %
+                (self.usb_info, self.Timeout(timeout_ms)), e
+            )
 
     def BulkRead(self, length, timeout_ms=None):
         if self._handle is None:
             raise usb_exceptions.ReadFailedError(
                 'This handle has been closed, probably due to another being opened.',
-                None)
+                None
+            )
         try:
             # python-libusb1 > 1.6 exposes bytearray()s now instead of bytes/str.
             # To support older and newer versions, we ensure everything's bytearray()
             # from here on out.
-            return bytearray(self._handle.bulkRead(
-                self._read_endpoint, length, timeout=self.Timeout(timeout_ms)))
+            return bytearray(
+                self._handle.bulkRead(
+                    self._read_endpoint,
+                    length,
+                    timeout=self.Timeout(timeout_ms)
+                )
+            )
         except libusb1.USBError as e:
             raise usb_exceptions.ReadFailedError(
-                'Could not receive data from %s (timeout %sms)' % (
-                    self.usb_info, self.Timeout(timeout_ms)), e)
+                'Could not receive data from %s (timeout %sms)' %
+                (self.usb_info, self.Timeout(timeout_ms)), e
+            )
 
     def BulkReadAsync(self, length, timeout_ms=None):
         # See: https://pypi.python.org/pypi/libusb1 "Asynchronous I/O" section
@@ -204,7 +218,9 @@ class UsbHandle(object):
         """Returns a device matcher for the given port path."""
         if isinstance(port_path, str):
             # Convert from sysfs path to port_path.
-            port_path = [int(part) for part in SYSFS_PORT_SPLIT_RE.split(port_path)]
+            port_path = [
+                int(part) for part in SYSFS_PORT_SPLIT_RE.split(port_path)
+            ]
         return lambda device: device.port_path == port_path
 
     @classmethod
@@ -213,17 +229,23 @@ class UsbHandle(object):
         return lambda device: device.serial_number == serial
 
     @classmethod
-    def FindAndOpen(cls, setting_matcher,
-                    port_path=None, serial=None, timeout_ms=None):
+    def FindAndOpen(
+        cls, setting_matcher, port_path=None, serial=None, timeout_ms=None
+    ):
         dev = cls.Find(
-            setting_matcher, port_path=port_path, serial=serial,
-            timeout_ms=timeout_ms)
+            setting_matcher,
+            port_path=port_path,
+            serial=serial,
+            timeout_ms=timeout_ms
+        )
         dev.Open()
         dev.FlushBuffers()
         return dev
 
     @classmethod
-    def Find(cls, setting_matcher, port_path=None, serial=None, timeout_ms=None):
+    def Find(
+        cls, setting_matcher, port_path=None, serial=None, timeout_ms=None
+    ):
         """Gets the first device that matches according to the keyword args."""
         if port_path:
             device_matcher = cls.PortPathMatcher(port_path)
@@ -234,8 +256,12 @@ class UsbHandle(object):
         else:
             device_matcher = None
             usb_info = 'first'
-        return cls.FindFirst(setting_matcher, device_matcher,
-                             usb_info=usb_info, timeout_ms=timeout_ms)
+        return cls.FindFirst(
+            setting_matcher,
+            device_matcher,
+            usb_info=usb_info,
+            timeout_ms=timeout_ms
+        )
 
     @classmethod
     def FindFirst(cls, setting_matcher, device_matcher=None, **kwargs):
@@ -253,15 +279,20 @@ class UsbHandle(object):
           DeviceNotFoundError: Raised if the device is not available.
         """
         try:
-            return next(cls.FindDevices(
-                setting_matcher, device_matcher=device_matcher, **kwargs))
+            return next(
+                cls.FindDevices(
+                    setting_matcher, device_matcher=device_matcher, **kwargs
+                )
+            )
         except StopIteration:
             raise usb_exceptions.DeviceNotFoundError(
-                'No device available, or it is in the wrong configuration.')
+                'No device available, or it is in the wrong configuration.'
+            )
 
     @classmethod
-    def FindDevices(cls, setting_matcher, device_matcher=None,
-                    usb_info='', timeout_ms=None):
+    def FindDevices(
+        cls, setting_matcher, device_matcher=None, usb_info='', timeout_ms=None
+    ):
         """Find and yield the devices that match.
 
         Args:
@@ -281,7 +312,9 @@ class UsbHandle(object):
             if setting is None:
                 continue
 
-            handle = cls(device, setting, usb_info=usb_info, timeout_ms=timeout_ms)
+            handle = cls(
+                device, setting, usb_info=usb_info, timeout_ms=timeout_ms
+            )
             if device_matcher is None or device_matcher(handle):
                 yield handle
 
@@ -298,15 +331,17 @@ class TcpHandle(object):
 
         Host may be an IP address or a host name.
         """
-        if b':' in serial:
-            (host, port) = serial.split(b':')
+        if ':' in serial:
+            (host, port) = serial.split(':')
         else:
             host = serial
             port = 5555
         self._serial_number = '%s:%s' % (host, port)
         self._timeout_ms = float(timeout_ms) if timeout_ms else None
         timeout = self.TimeoutSeconds(self._timeout_ms)
-        self._connection = socket.create_connection((host, port), timeout=timeout)
+        self._connection = socket.create_connection(
+            (host, port), timeout=timeout
+        )
         if timeout:
             self._connection.setblocking(0)
 
@@ -320,7 +355,8 @@ class TcpHandle(object):
         if writeable:
             return self._connection.send(data)
         msg = 'Sending data to {} timed out after {}s. No data was sent.'.format(
-            self.serial_number, t)
+            self.serial_number, t
+        )
         raise usb_exceptions.TcpTimeoutException(msg)
 
     def BulkRead(self, numbytes, timeout=None):
@@ -329,7 +365,8 @@ class TcpHandle(object):
         if readable:
             return self._connection.recv(numbytes)
         msg = 'Reading from {} timed out (Timeout {}s)'.format(
-            self._serial_number, t)
+            self._serial_number, t
+        )
         raise usb_exceptions.TcpTimeoutException(msg)
 
     def Timeout(self, timeout_ms):
